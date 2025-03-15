@@ -21,7 +21,7 @@ if (!supabaseUrl) {
 
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
 if (!supabaseAnonKey) {
-  console.error('Supabase Anonymous Key is not defined in the environment variables.');
+  console.error('Supabase Anonymous key is not defined in the environment variables.');
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
