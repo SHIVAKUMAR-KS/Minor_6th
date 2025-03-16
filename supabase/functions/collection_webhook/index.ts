@@ -74,7 +74,7 @@ Deno.serve(async (req) => {
   const data = await req.json();
   const snapshot_id = req.headers.get("snapshot-id");
 
-  console.log("Data: ", data);
+  console.log("Data: ", data);https://www.youtube.com/@harkirat1
   console.log("Snapshot ID: ", snapshot_id);
 
   // supa client
