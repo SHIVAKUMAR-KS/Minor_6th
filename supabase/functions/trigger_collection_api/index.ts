@@ -4,6 +4,10 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 Deno.serve(async (req) => {
   const { input, dataset_id, extra_params } = await req.json();
 
+  /*
+  curl -H "Authorization: Bearer eb96bdf70ff8148d6a5fb9f5167d2e74b203d33b93eafd9794360257e968f1d2" -H "Content-Type: application/json" -d '{"deliver":{"type":"s3","filename":{"template":"{[snapshot_id]}","extension":"json"},"bucket":"","directory":""},"input":[{"url":"https://www.youtube.com/@MrBeast/about"}]}' "https://api.brightdata.com/datasets/v3/trigger?dataset_id=gd_lk538t2k2p1k3oos71&include_errors=true"
+
+  */
   const response = await fetch(
     `https://api.brightdata.com/datasets/v3/trigger?dataset_id=${dataset_id}&endpoint=${
       Deno.env.get("SUPABASE_URL")

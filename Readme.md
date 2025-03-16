@@ -1,3 +1,7 @@
 
+-->  npx supabase link --project-ref gysbctwaebmscaqptnbt
 
-done with 50 min,now will start from edge function
+//npx supabase functions deploy
+
+
+ npx supabase set --env-file ./supabase/functions/.env
