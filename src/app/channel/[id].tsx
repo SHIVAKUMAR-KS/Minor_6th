@@ -4,6 +4,9 @@ import { View, Text, Image, ScrollView, Alert, Pressable, ActivityIndicator } fr
 import { Button } from '~/components/Button';
 import { fetchChannelVideos } from '~/lib/youtube';
 import { supabase } from '~/lib/supabase';
+import { PerformanceDashboard } from '~/components/PerformanceDashboard';
+import { calculateVideoMetrics } from '~/lib/analytics';
+import { useState } from 'react';
 
 const fetchChannel = async (id: string) => {
   const { data, error } = await supabase
@@ -32,6 +35,7 @@ const fetchVideos = async (id: string) => {
 export default function Channel() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState<'overview' | 'videos' | 'analytics'>('overview');
 
   const {
     data: channel,
@@ -50,6 +54,8 @@ export default function Channel() {
     queryKey: ['videos', id],
     queryFn: () => fetchVideos(id),
   });
+
+  const metrics = videos ? calculateVideoMetrics(videos) : null;
 
   const collectVideos = async () => {
     try {
@@ -111,7 +117,7 @@ export default function Channel() {
   }
 
   return (
-    <ScrollView className="flex-1">
+    <View className="flex-1">
       <Stack.Screen options={{ title: channel.name }} />
 
       {/* Channel Header */}
@@ -131,37 +137,91 @@ export default function Channel() {
         </View>
       </View>
 
-      {/* Videos Section */}
-      <View className="p-4">
-        <View className="flex-row items-center justify-between">
-          <Text className="text-xl font-bold">Videos</Text>
-          <Button onPress={collectVideos} loading={videosLoading}>
-            Refresh Videos
-          </Button>
-        </View>
-
-        {videosLoading ? (
-          <ActivityIndicator className="my-4" />
-        ) : videosError ? (
-          <Text className="text-red-500">Error loading videos</Text>
-        ) : videos?.length === 0 ? (
-          <Text className="my-4 text-gray-500">No videos found. Click Refresh Videos to fetch latest videos.</Text>
-        ) : (
-          <View className="mt-4">
-            {videos?.map((video) => (
-              <Link key={video.id} href={`/video/${video.id}`} asChild>
-                <Pressable className="mb-4 rounded-lg border border-gray-200 overflow-hidden">
-                  <Image source={{ uri: video.preview_image }} className="h-48 w-full object-cover" />
-                  <View className="p-4">
-                    <Text className="text-lg font-semibold">{video.title}</Text>
-                    <Text className="text-gray-600">{video.views} views</Text>
-                  </View>
-                </Pressable>
-              </Link>
-            ))}
-          </View>
-        )}
+      {/* Navigation Tabs */}
+      <View className="flex-row border-b border-gray-200">
+        <Pressable
+          className={`flex-1 py-2 ${activeTab === 'overview' ? 'border-b-2 border-blue-500' : ''}`}
+          onPress={() => setActiveTab('overview')}
+        >
+          <Text className={`text-center ${activeTab === 'overview' ? 'text-blue-500' : 'text-gray-600'}`}>
+            Overview
+          </Text>
+        </Pressable>
+        <Pressable
+          className={`flex-1 py-2 ${activeTab === 'videos' ? 'border-b-2 border-blue-500' : ''}`}
+          onPress={() => setActiveTab('videos')}
+        >
+          <Text className={`text-center ${activeTab === 'videos' ? 'text-blue-500' : 'text-gray-600'}`}>
+            Videos
+          </Text>
+        </Pressable>
+        <Pressable
+          className={`flex-1 py-2 ${activeTab === 'analytics' ? 'border-b-2 border-blue-500' : ''}`}
+          onPress={() => setActiveTab('analytics')}
+        >
+          <Text className={`text-center ${activeTab === 'analytics' ? 'text-blue-500' : 'text-gray-600'}`}>
+            Analytics
+          </Text>
+        </Pressable>
       </View>
-    </ScrollView>
+
+      {/* Tab Content */}
+      {activeTab === 'overview' && (
+        <ScrollView className="flex-1 p-4">
+          <Text className="text-lg font-semibold mb-2">About</Text>
+          <Text className="mb-4">{channel.description}</Text>
+          <Text className="text-lg font-semibold mb-2">Stats</Text>
+          <View className="space-y-2">
+            <Text>Total Videos: {channel.videos_count}</Text>
+            <Text>Total Views: {channel.views}</Text>
+            <Text>Created: {new Date(channel.created_date).toLocaleDateString()}</Text>
+            {channel.location && <Text>Location: {channel.location}</Text>}
+          </View>
+        </ScrollView>
+      )}
+
+      {activeTab === 'videos' && (
+        <ScrollView className="flex-1">
+          <View className="p-4">
+            <View className="flex-row items-center justify-between mb-4">
+              <Text className="text-xl font-bold">Videos</Text>
+              <Button onPress={collectVideos} loading={videosLoading}>
+                Refresh Videos
+              </Button>
+            </View>
+
+            {videosLoading ? (
+              <ActivityIndicator className="my-4" />
+            ) : videosError ? (
+              <Text className="text-red-500">Error loading videos</Text>
+            ) : videos?.length === 0 ? (
+              <Text className="my-4 text-gray-500">No videos found. Click Refresh Videos to fetch latest videos.</Text>
+            ) : (
+              <View className="space-y-4">
+                {videos?.map((video) => (
+                  <Link key={video.id} href={`/video/${video.id}`} asChild>
+                    <Pressable className="rounded-lg border border-gray-200 overflow-hidden">
+                      <Image source={{ uri: video.preview_image }} className="h-48 w-full object-cover" />
+                      <View className="p-4">
+                        <Text className="text-lg font-semibold">{video.title}</Text>
+                        <View className="flex-row space-x-4 mt-2">
+                          <Text className="text-gray-600">{video.views} views</Text>
+                          <Text className="text-gray-600">{video.likes} likes</Text>
+                          <Text className="text-gray-600">{video.comments} comments</Text>
+                        </View>
+                      </View>
+                    </Pressable>
+                  </Link>
+                ))}
+              </View>
+            )}
+          </View>
+        </ScrollView>
+      )}
+
+      {activeTab === 'analytics' && metrics && (
+        <PerformanceDashboard metrics={metrics} />
+      )}
+    </View>
   );
 }
