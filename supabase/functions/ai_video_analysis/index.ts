@@ -26,7 +26,7 @@ Deno.serve(async (req) => {
 
   // Documentation here: https://github.com/openai/openai-node
   const chatCompletion = await openai.chat.completions.create({
-    messages: [
+      messages: [
       {
         role: "developer",
         content:

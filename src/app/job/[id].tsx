@@ -31,7 +31,7 @@ export default function JobPage() {
       .on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'scrape_jobs', filter: `id=eq.${id}` },
-        (payload) => {
+        (payload) =>{
           const updatedJob = payload.new;
           router.replace(`/channel/${updatedJob.channel_id}`);
           queryClient.invalidateQueries({ queryKey: ['channels'] });
