@@ -38,6 +38,38 @@ interface VideoStats {
   tags: string[];
 }
 
+interface PlaylistResponse {
+  items: Array<{
+    contentDetails: {
+      videoId: string;
+    };
+    snippet: {
+      title: string;
+      publishedAt: string;
+      description: string;
+      thumbnails: {
+        high?: { url: string };
+        default?: { url: string };
+      };
+    };
+  }>;
+  nextPageToken?: string;
+}
+
+interface VideoResponse {
+  items: Array<{
+    id: string;
+    snippet: {
+      tags?: string[];
+    };
+    statistics: {
+      viewCount?: string;
+      likeCount?: string;
+      commentCount?: string;
+    };
+  }>;
+}
+
 // Extract channel ID from URL
 export function extractChannelId(url: string): string | null {
   try {
@@ -145,10 +177,10 @@ export async function fetchChannelVideos(channelId: string, maxResults: number =
     const uploadsPlaylistId = channelData.items[0].contentDetails.relatedPlaylists.uploads;
     console.log('Uploads playlist ID:', uploadsPlaylistId);
 
-    let allVideos: any[] = [];
+    let allVideos: PlaylistResponse['items'] = [];
     let nextPageToken: string | undefined = undefined;
     let totalFetched = 0;
-    const maxVideosToFetch = 200; // Limit to 200 videos total to avoid rate limits
+    const maxVideosToFetch = 200;
 
     // Fetch videos page by page
     do {
@@ -159,7 +191,7 @@ export async function fetchChannelVideos(channelId: string, maxResults: number =
         throw new Error(`Failed to fetch videos: ${videosResponse.statusText}`);
       }
 
-      const videosData = await videosResponse.json();
+      const videosData: PlaylistResponse = await videosResponse.json();
       console.log('Found videos in current page:', videosData.items?.length || 0);
       
       if (!videosData.items || videosData.items.length === 0) {
@@ -182,11 +214,11 @@ export async function fetchChannelVideos(channelId: string, maxResults: number =
       return [];
     }
 
-    // Get video statistics in batches of 50
+    // Get video statistics and details in batches of 50
     const videos: YouTubeVideo[] = [];
     for (let i = 0; i < allVideos.length; i += 50) {
       const batch = allVideos.slice(i, i + 50);
-      const videoIds = batch.map((item: any) => item.contentDetails.videoId).join(',');
+      const videoIds = batch.map((item) => item.contentDetails.videoId).join(',');
       
       const statsResponse = await fetch(
         `https://www.googleapis.com/youtube/v3/videos?part=statistics,snippet&id=${videoIds}&key=${YOUTUBE_API_KEY}`
@@ -196,22 +228,26 @@ export async function fetchChannelVideos(channelId: string, maxResults: number =
         throw new Error(`Failed to fetch video statistics: ${statsResponse.statusText}`);
       }
 
-      const statsData = await statsResponse.json();
+      const statsData: VideoResponse = await statsResponse.json();
       console.log(`Got statistics for videos batch ${i/50 + 1}:`, statsData.items?.length || 0);
 
-      const batchVideos = batch.map((item: any) => {
-        const stats = statsData.items?.find((s: any) => s.id === item.contentDetails.videoId)?.statistics || {};
+      const batchVideos = batch.map((item) => {
+        const stats = statsData.items?.find((s) => s.id === item.contentDetails.videoId);
+        const videoDetails = stats?.snippet || {};
+        const videoStats = stats?.statistics || {};
+        
         return {
           id: item.contentDetails.videoId,
           url: `https://youtube.com/watch?v=${item.contentDetails.videoId}`,
           title: item.snippet.title,
-          likes: stats.likeCount || '0',
-          views: stats.viewCount || '0',
+          likes: videoStats.likeCount || '0',
+          views: videoStats.viewCount || '0',
           published_at: item.snippet.publishedAt,
           description: item.snippet.description,
-          comments: stats.commentCount || '0',
+          comments: videoStats.commentCount || '0',
           preview_image: item.snippet.thumbnails.high?.url || item.snippet.thumbnails.default?.url,
           youtuber_id: channelId,
+          tags: videoDetails.tags || [],
         };
       });
 

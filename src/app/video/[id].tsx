@@ -2,21 +2,29 @@ import { useQuery } from '@tanstack/react-query';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { View, Text, Image, ScrollView, ActivityIndicator } from 'react-native';
 import { supabase } from '~/lib/supabase';
+import { useTheme } from '~/context/ThemeContext';
+import { lightTheme, darkTheme } from '~/theme/colors';
 
 const fetchVideo = async (id: string) => {
   const { data, error } = await supabase
     .from('yt_videos')
     .select('*, yt_channels!inner(*)')
     .eq('id', id)
-    .single();
+    .limit(1);
+
   if (error) {
     throw error;
   }
-  return data;
+  if (!data || data.length === 0) {
+    throw new Error('Video not found');
+  }
+  return data[0];
 };
 
 export default function Video() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { isDark } = useTheme();
+  const theme = isDark ? darkTheme : lightTheme;
 
   const {
     data: video,
@@ -29,65 +37,89 @@ export default function Video() {
 
   if (isLoading) {
     return (
-      <View className="flex-1 items-center justify-center">
-        <ActivityIndicator size="large" />
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.background }}>
+        <ActivityIndicator size="large" color={theme.text} />
       </View>
     );
   }
 
   if (error) {
     return (
-      <View className="flex-1 items-center justify-center">
-        <Text className="text-red-500">Error: {error.message}</Text>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.background }}>
+        <Text style={{ color: theme.error }}>Error: {error.message}</Text>
       </View>
     );
   }
 
   return (
-    <ScrollView className="flex-1">
-      <Stack.Screen options={{ title: video.title }} />
+    <ScrollView style={{ flex: 1, backgroundColor: theme.background }}>
+      <Stack.Screen
+        options={{
+          title: video.title,
+          headerStyle: {
+            backgroundColor: theme.card,
+            borderBottomColor: theme.border,
+          },
+          headerTintColor: theme.text,
+          headerTitleStyle: {
+            color: theme.text,
+          },
+        }}
+      />
 
       {/* Video Preview */}
-      <Image source={{ uri: video.preview_image }} className="h-56 w-full object-cover" />
+      <Image
+        source={{ uri: video.preview_image }}
+        style={{ height: 224, width: '100%', resizeMode: 'cover' }}
+      />
 
       {/* Video Info */}
-      <View className="p-4">
-        <Text className="text-2xl font-bold">{video.title}</Text>
+      <View style={{ padding: 16 }}>
+        <Text style={{ fontSize: 24, fontWeight: 'bold', color: theme.text }}>{video.title}</Text>
 
-        <View className="mt-2 flex-row items-center">
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
           <Image
             source={{ uri: video.yt_channels.profile_image }}
-            className="h-10 w-10 rounded-full"
+            style={{ width: 40, height: 40, borderRadius: 20 }}
           />
-          <View className="ml-3">
-            <Text className="font-semibold">{video.yt_channels.name}</Text>
-            <Text className="text-gray-600">{video.yt_channels.subscribers} subscribers</Text>
+          <View style={{ marginLeft: 12 }}>
+            <Text style={{ fontWeight: '600', color: theme.text }}>{video.yt_channels.name}</Text>
+            <Text style={{ color: theme.textSecondary }}>{video.yt_channels.subscribers} subscribers</Text>
           </View>
         </View>
 
-        <View className="mt-4 flex-row justify-between">
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 16 }}>
           <View>
-            <Text className="text-gray-600">{video.views} views</Text>
-            <Text className="text-gray-600">{new Date(video.published_at).toLocaleDateString()}</Text>
+            <Text style={{ color: theme.textSecondary }}>{video.views} views</Text>
+            <Text style={{ color: theme.textSecondary }}>{new Date(video.published_at).toLocaleDateString()}</Text>
           </View>
           <View>
-            <Text className="text-gray-600">{video.likes} likes</Text>
-            <Text className="text-gray-600">{video.comments} comments</Text>
+            <Text style={{ color: theme.textSecondary }}>{video.likes} likes</Text>
+            <Text style={{ color: theme.textSecondary }}>{video.comments} comments</Text>
           </View>
         </View>
 
-        <View className="mt-4">
-          <Text className="text-lg font-semibold">Description</Text>
-          <Text className="mt-2 text-gray-800">{video.description}</Text>
+        <View style={{ marginTop: 16 }}>
+          <Text style={{ fontSize: 18, fontWeight: '600', color: theme.text }}>Description</Text>
+          <Text style={{ marginTop: 8, color: theme.textSecondary }}>{video.description}</Text>
         </View>
 
         {video.tags && video.tags.length > 0 && (
-          <View className="mt-4">
-            <Text className="text-lg font-semibold">Tags</Text>
-            <View className="mt-2 flex-row flex-wrap">
+          <View style={{ marginTop: 16 }}>
+            <Text style={{ fontSize: 18, fontWeight: '600', color: theme.text }}>Tags</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 8 }}>
               {video.tags.map((tag: string, index: number) => (
-                <View key={index} className="m-1 rounded-full bg-gray-100 px-3 py-1">
-                  <Text className="text-gray-800">{tag}</Text>
+                <View
+                  key={index}
+                  style={{
+                    backgroundColor: theme.surface,
+                    borderRadius: 16,
+                    paddingHorizontal: 12,
+                    paddingVertical: 4,
+                    margin: 4
+                  }}
+                >
+                  <Text style={{ color: theme.text }}>{tag}</Text>
                 </View>
               ))}
             </View>

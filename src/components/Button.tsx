@@ -1,30 +1,58 @@
-import { forwardRef } from 'react';
-import { Text, TouchableOpacity, TouchableOpacityProps, View, ActivityIndicator } from 'react-native';
+import React from 'react';
+import { TouchableOpacity, Text, ActivityIndicator, StyleSheet, ViewStyle, TextStyle } from 'react-native';
+import { useTheme } from '../context/ThemeContext';
+import { lightTheme, darkTheme } from '../theme/colors';
 
 interface ButtonProps {
   onPress: () => void;
   children: React.ReactNode;
   loading?: boolean;
-  className?: string;
+  disabled?: boolean;
+  style?: ViewStyle;
+  textStyle?: TextStyle;
 }
 
-export function Button({ onPress, children, loading, className }: ButtonProps) {
+export function Button({ onPress, children, loading, disabled, style, textStyle }: ButtonProps) {
+  const { isDark } = useTheme();
+  const theme = isDark ? darkTheme : lightTheme;
+
+  const handlePress = () => {
+    if (loading || disabled) return;
+    onPress();
+  };
+
   return (
     <TouchableOpacity
-      onPress={onPress}
-      disabled={loading}
-      className={`rounded-lg bg-blue-500 px-4 py-2 ${loading ? 'opacity-50' : ''} ${className || ''}`}
+      onPress={handlePress}
+      disabled={loading || disabled}
+      style={[
+        styles.button,
+        {
+          backgroundColor: theme.primary,
+          opacity: loading || disabled ? 0.6 : 1,
+        },
+        style,
+      ]}
     >
       {loading ? (
-        <ActivityIndicator color="white" />
+        <ActivityIndicator color="#FFFFFF" />
       ) : (
-        <Text className="text-center text-white font-semibold">{children}</Text>
+        <Text style={[styles.text, { color: '#FFFFFF' }, textStyle]}>{children}</Text>
       )}
     </TouchableOpacity>
   );
 }
 
-const styles = {
-  button: 'items-center bg-indigo-500 rounded-[28px] shadow-md p-4',
-  buttonText: 'text-white text-lg font-semibold text-center',
-};
+const styles = StyleSheet.create({
+  button: {
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 120,
+  },
+  text: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+});

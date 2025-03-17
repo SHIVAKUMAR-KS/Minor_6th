@@ -21,6 +21,17 @@ export interface VideoPerformanceMetrics {
     date: string;
     views: number;
   }>;
+  durationAnalysis: {
+    short: number;
+    medium: number;
+    long: number;
+    bestPerforming: 'short' | 'medium' | 'long';
+    averageDuration: number;
+  };
+  engagementTrend: Array<{
+    date: string;
+    engagementRate: number;
+  }>;
 }
 
 export function calculateVideoMetrics(videos: any[]): VideoPerformanceMetrics {
@@ -36,6 +47,14 @@ export function calculateVideoMetrics(videos: any[]): VideoPerformanceMetrics {
       viewsGrowth: 0,
       topVideos: [],
       viewsTrend: [],
+      durationAnalysis: {
+        short: 0,
+        medium: 0,
+        long: 0,
+        bestPerforming: 'medium',
+        averageDuration: 0,
+      },
+      engagementTrend: [],
     };
   }
 
@@ -46,6 +65,7 @@ export function calculateVideoMetrics(videos: any[]): VideoPerformanceMetrics {
     likes: parseInt(video.likes) || 0,
     comments: parseInt(video.comments) || 0,
     published_at: parseISO(video.published_at),
+    duration: parseInt(video.duration) || 0, // Duration in seconds
   }));
 
   // Calculate totals
@@ -107,6 +127,62 @@ export function calculateVideoMetrics(videos: any[]): VideoPerformanceMetrics {
     .map(([date, views]) => ({ date, views }))
     .sort((a, b) => a.date.localeCompare(b.date));
 
+  // Duration analysis
+  const durationCategories = {
+    short: 0,
+    medium: 0,
+    long: 0,
+  };
+
+  let totalViewsByDuration = {
+    short: 0,
+    medium: 0,
+    long: 0,
+  };
+
+  processedVideos.forEach(video => {
+    const duration = video.duration;
+    if (duration < 300) { // Less than 5 minutes
+      durationCategories.short++;
+      totalViewsByDuration.short += video.views;
+    } else if (duration <= 900) { // 5-15 minutes
+      durationCategories.medium++;
+      totalViewsByDuration.medium += video.views;
+    } else { // More than 15 minutes
+      durationCategories.long++;
+      totalViewsByDuration.long += video.views;
+    }
+  });
+
+  const bestPerformingDuration = Object.entries(totalViewsByDuration)
+    .sort(([, a], [, b]) => b - a)[0][0] as 'short' | 'medium' | 'long';
+
+  const averageDuration = processedVideos.reduce((sum, video) => sum + video.duration, 0) / videos.length;
+
+  // Calculate engagement rate trend
+  const engagementByDate = processedVideos
+    .filter(video => video.published_at >= thirtyDaysAgo)
+    .reduce((acc: { [key: string]: { total: number; count: number } }, video) => {
+      const dateStr = format(video.published_at, 'yyyy-MM-dd');
+      const engagementRate = video.views > 0 
+        ? ((video.likes + video.comments) / video.views) * 100 
+        : 0;
+      
+      if (!acc[dateStr]) {
+        acc[dateStr] = { total: 0, count: 0 };
+      }
+      acc[dateStr].total += engagementRate;
+      acc[dateStr].count += 1;
+      return acc;
+    }, {});
+
+  const engagementTrend = Object.entries(engagementByDate)
+    .map(([date, { total, count }]) => ({
+      date,
+      engagementRate: total / count,
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+
   return {
     totalViews,
     totalLikes,
@@ -118,6 +194,12 @@ export function calculateVideoMetrics(videos: any[]): VideoPerformanceMetrics {
     viewsGrowth,
     topVideos,
     viewsTrend,
+    durationAnalysis: {
+      ...durationCategories,
+      bestPerforming: bestPerformingDuration,
+      averageDuration,
+    },
+    engagementTrend,
   };
 }
 
@@ -129,4 +211,15 @@ export function formatNumber(num: number): string {
     return (num / 1000).toFixed(1) + 'K';
   }
   return num.toString();
+}
+
+export function formatDuration(seconds: number): string {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const remainingSeconds = seconds % 60;
+
+  if (hours > 0) {
+    return `${hours}:${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+  }
+  return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
 } 
