@@ -1,34 +1,39 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 
-let storage;
-if (typeof window !== 'undefined') {
-  // Only use AsyncStorage in a browser environment
-  const AsyncStorage = require('@react-native-async-storage/async-storage').default;
-  storage = AsyncStorage;
-} else {
-  // Fallback storage or handle server-side logic
-  storage = {
-    getItem: async () => null,
-    setItem: async () => {},
-    removeItem: async () => {},
-  };
-}
-
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
-if (!supabaseUrl) {
-  console.error('Supabase URL is not defined in the environment variables.');
-}
-
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
-if (!supabaseAnonKey) {
-  console.error('Supabase Anonymous key is not defined in the environment variables.');
+
+// Debug environment variables
+console.log('Environment Variables Check:');
+console.log('SUPABASE_URL:', supabaseUrl ? 'Set' : 'Not Set');
+console.log('SUPABASE_ANON_KEY:', supabaseAnonKey ? 'Set' : 'Not Set');
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.error('Missing Supabase environment variables. Please check your .env file.');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    storage: storage,
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: false,
-  },
-});
+const getSupabaseClient = () => {
+  try {
+    if (typeof window === 'undefined') {
+      // Server-side - don't use AsyncStorage
+      return createClient(supabaseUrl, supabaseAnonKey);
+    }
+
+    // Client-side - use AsyncStorage
+    return createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        storage: AsyncStorage,
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: false,
+      },
+    });
+  } catch (error) {
+    console.error('Error initializing Supabase client:', error);
+    // Return a basic client as fallback
+    return createClient(supabaseUrl, supabaseAnonKey);
+  }
+};
+
+export const supabase = getSupabaseClient();

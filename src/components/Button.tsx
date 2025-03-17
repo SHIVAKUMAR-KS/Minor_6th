@@ -1,20 +1,28 @@
 import { forwardRef } from 'react';
-import { Text, TouchableOpacity, TouchableOpacityProps, View } from 'react-native';
+import { Text, TouchableOpacity, TouchableOpacityProps, View, ActivityIndicator } from 'react-native';
 
-type ButtonProps = {
-  title: string;
-} & TouchableOpacityProps;
+interface ButtonProps {
+  onPress: () => void;
+  children: React.ReactNode;
+  loading?: boolean;
+  className?: string;
+}
 
-export const Button = forwardRef<View, ButtonProps>(({ title, ...touchableProps }, ref) => {
+export function Button({ onPress, children, loading, className }: ButtonProps) {
   return (
     <TouchableOpacity
-      ref={ref}
-      {...touchableProps}
-      className={`${styles.button} ${touchableProps.className}`}>
-      <Text className={styles.buttonText}>{title}</Text>
+      onPress={onPress}
+      disabled={loading}
+      className={`rounded-lg bg-blue-500 px-4 py-2 ${loading ? 'opacity-50' : ''} ${className || ''}`}
+    >
+      {loading ? (
+        <ActivityIndicator color="white" />
+      ) : (
+        <Text className="text-center text-white font-semibold">{children}</Text>
+      )}
     </TouchableOpacity>
   );
-});
+}
 
 const styles = {
   button: 'items-center bg-indigo-500 rounded-[28px] shadow-md p-4',

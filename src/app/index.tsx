@@ -1,10 +1,11 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Stack, Link, router } from 'expo-router';
 import { useState } from 'react';
-import { View, Text, TextInput, ScrollView, Pressable, Alert, Image } from 'react-native';
+import { View, Text, TextInput, ScrollView, Pressable, Alert, Image, ActivityIndicator } from 'react-native';
 
+import { Button } from '~/components/Button';
 import { Container } from '~/components/Container';
-import { YT_CHANNELS_DATASET_ID } from '~/constants';
+import { fetchChannelData, extractChannelId } from '~/lib/youtube';
 import { supabase } from '~/lib/supabase';
 
 const POPULAR_CHANNELS = [
@@ -25,6 +26,8 @@ const fetchChannels = async () => {
 
 export default function Home() {
   const [url, setUrl] = useState('');
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const queryClient = useQueryClient();
 
   const {
     data: channels,
@@ -32,106 +35,109 @@ export default function Home() {
     error,
   } = useQuery({
     queryKey: ['channels'],
-    queryFn: () => fetchChannels(),
+    queryFn: fetchChannels,
   });
 
   const startAnalyzing = async () => {
-    if (!url) {
-      return;
-    }
-    // check if data about this channel already exists
-    const { data: channels, error: channelsError } = await supabase
-      .from('yt_channels')
-      .select('*')
-      .eq('url', url);
+    try {
+      setIsAnalyzing(true);
 
-    if (channels && channels.length > 0) {
-      router.push(`/channel/${channels[0].id}`);
-      return;
-    }
+      // Extract channel ID from URL
+      const channelId = extractChannelId(url);
+      if (!channelId) {
+        throw new Error('Invalid YouTube channel URL');
+      }
 
-    const { error, data } = await supabase.functions.invoke('trigger_collection_api', {
-      body: { input: [{ url }], dataset_id: YT_CHANNELS_DATASET_ID },
-    });
+      // Fetch channel data from YouTube API
+      const channelData = await fetchChannelData(channelId);
 
-    if (error) {
+      // Save to database
+      const { error: saveError } = await supabase
+        .from('yt_channels')
+        .upsert({
+          ...channelData,
+          updated_at: new Date().toISOString(),
+        });
+
+      if (saveError) {
+        throw saveError;
+      }
+
+      // Refresh channels list
+      queryClient.invalidateQueries({ queryKey: ['channels'] });
+
+      // Navigate to channel page
+      router.push(`/channel/${channelData.id}`);
+    } catch (error: any) {
       Alert.alert('Error', error.message);
-      return;
+    } finally {
+      setIsAnalyzing(false);
     }
-
-    router.push(`/job/${data.id}`);
   };
 
   return (
-    <>
-      <Stack.Screen options={{ title: 'YouTube Analyzer' }} />
-      <View className="flex-1 bg-white p-2">
-        <ScrollView className="flex-1">
-          {/* Hero Section */}
-          <View className="py-12">
-            <Text className="mb-2 text-center text-4xl font-bold">YouTube Channel Analyzer</Text>
-            <Text className="mb-8 text-center text-gray-600">
-              Discover insights about any YouTube channel
-            </Text>
-            {/* Search Input */}
-            <View className="px-4">
-              <View className="flex-row items-center space-x-2 rounded-2xl bg-gray-100 p-2 shadow-sm">
-                <TextInput
-                  value={url}
-                  onChangeText={setUrl}
-                  placeholder="Paste YouTube channel URL"
-                  placeholderTextColor="#6B7280"
-                  className="h-12 flex-1 px-4 text-lg text-gray-900"
-                />
+    <Container>
+      <Stack.Screen options={{ title: 'YouTube Channel Analysis' }} />
 
-                <Pressable
-                  onPress={startAnalyzing}
-                  className="h-12 items-center justify-center rounded-xl bg-red-600 px-8">
-                  <Text className="text-lg font-semibold text-white">Analyze</Text>
-                </Pressable>
-              </View>
-              <Text className="mt-2 text-center text-sm text-gray-500">
-                Example: https://youtube.com/@mkbhd
-              </Text>
-            </View>
-            {/* Popular Channels */}
-            <View className="mt-12">
-              <Text className="mb-4 px-4 text-lg font-semibold">Popular Channels</Text>
-              <View className="flex-row flex-wrap gap-2 px-4">
-                {POPULAR_CHANNELS.map((channel) => (
-                  <Link key={channel.id} href={`/channel/${channel.id}`} asChild>
-                    <Pressable className="rounded-full bg-gray-100 px-4 py-2">
-                      <Text className="text-gray-900">{channel.name}</Text>
-                    </Pressable>
-                  </Link>
-                ))}
-              </View>
-            </View>
-            {/* Recent Searches */}
-            <View className="mt-12">
-              <Text className="mb-4 px-4 text-lg font-semibold">Recent Searches</Text>
-              <View className="divide-y divide-gray-200">
-                {(channels || []).map((channel) => (
-                  <Link key={channel.id} href={`/channel/${channel.id}`} asChild>
-                    <Pressable className="flex-row items-center gap-4 px-4 py-4">
-                      <Image
-                        source={{ uri: channel.profile_image }}
-                        className="h-10 w-10 rounded-full"
-                      />
-                      <View>
-                        <Text className="font-medium">{channel.name}</Text>
-                        <Text className="text-sm text-gray-600">
-                          {channel.subscribers} subscribers
-                        </Text>
-                      </View>
-                    </Pressable>
-                  </Link>
-                ))}
-              </View>
-            </View>
-          </View>
+      {/* Search Input */}
+      <View className="p-4">
+        <TextInput
+          placeholder="Enter YouTube channel URL"
+          value={url}
+          onChangeText={setUrl}
+          className="rounded-lg border border-gray-300 p-2"
+        />
+        <Button
+          onPress={startAnalyzing}
+          loading={isAnalyzing}
+          className="mt-2"
+        >
+          Start Analyzing
+        </Button>
+      </View>
+
+      {/* Popular Channels */}
+      <View className="p-4">
+        <Text className="text-xl font-bold">Popular Channels</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-2">
+          {POPULAR_CHANNELS.map((channel) => (
+            <Link key={channel.id} href={`/channel/${channel.id}`} asChild>
+              <Pressable className="mr-4 rounded-lg bg-gray-100 p-4">
+                <Text className="font-semibold">{channel.name}</Text>
+              </Pressable>
+            </Link>
+          ))}
         </ScrollView>
       </View>
-    </>
+
+      {/* Recently Analyzed */}
+      <View className="flex-1 p-4">
+        <Text className="text-xl font-bold">Recently Analyzed</Text>
+        {isLoading ? (
+          <ActivityIndicator className="mt-4" />
+        ) : error ? (
+          <Text className="mt-4 text-red-500">Error loading channels</Text>
+        ) : channels?.length === 0 ? (
+          <Text className="mt-4 text-gray-500">No channels analyzed yet</Text>
+        ) : (
+          <ScrollView className="mt-2">
+            {channels?.map((channel) => (
+              <Link key={channel.id} href={`/channel/${channel.id}`} asChild>
+                <Pressable className="mb-4 flex-row items-center rounded-lg border border-gray-200 p-4">
+                  <Image
+                    source={{ uri: channel.profile_image }}
+                    className="h-12 w-12 rounded-full"
+                  />
+                  <View className="ml-4">
+                    <Text className="font-semibold">{channel.name}</Text>
+                    <Text className="text-gray-600">{channel.subscribers} subscribers</Text>
+                  </View>
+                </Pressable>
+              </Link>
+            ))}
+          </ScrollView>
+        )}
+      </View>
+    </Container>
   );
 }

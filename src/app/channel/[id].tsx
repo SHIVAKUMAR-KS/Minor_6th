@@ -1,20 +1,28 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, Stack, useLocalSearchParams } from 'expo-router';
-import { View, Text, Image, ScrollView, Alert, Pressable } from 'react-native';
+import { View, Text, Image, ScrollView, Alert, Pressable, ActivityIndicator } from 'react-native';
 import { Button } from '~/components/Button';
-import { YT_VIDEOS_DATASET_ID } from '~/constants';
+import { fetchChannelVideos } from '~/lib/youtube';
 import { supabase } from '~/lib/supabase';
 
 const fetchChannel = async (id: string) => {
-  const { data, error } = await supabase.from('yt_channels').select('*').eq('id', id).single();
+  const { data, error } = await supabase
+    .from('yt_channels')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+
   if (error) {
     throw error;
+  }
+  if (!data) {
+    throw new Error('Channel not found');
   }
   return data;
 };
 
-const fetchVideos = async (channelId: string) => {
-  const { data, error } = await supabase.from('yt_videos').select('*').eq('youtuber_id', channelId);
+const fetchVideos = async (id: string) => {
+  const { data, error } = await supabase.from('yt_videos').select('*').eq('youtuber_id', id);
   if (error) {
     throw error;
   }
@@ -23,6 +31,7 @@ const fetchVideos = async (channelId: string) => {
 
 export default function Channel() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const queryClient = useQueryClient();
 
   const {
     data: channel,
@@ -43,99 +52,115 @@ export default function Channel() {
   });
 
   const collectVideos = async () => {
-    const { data, error } = await supabase.functions.invoke('trigger_collection_api', {
-      body: {
-        input: [{ url: channel.url, num_of_posts: 2, order_by: 'Latest' }],
-        dataset_id: YT_VIDEOS_DATASET_ID,
-        extra_params: 'type=discover_new&discover_by=url',
-      },
-    });
+    try {
+      // Fetch latest videos using YouTube API
+      const newVideos = await fetchChannelVideos(id);
 
-    if (error) {
+      if (newVideos.length === 0) {
+        Alert.alert('No Videos', 'No videos found for this channel');
+        return;
+      }
+
+      console.log('Saving videos to database:', newVideos.length);
+
+      // Save videos to database
+      const { error } = await supabase.from('yt_videos').upsert(
+        newVideos.map(video => ({
+          id: video.id,
+          url: video.url,
+          title: video.title,
+          likes: video.likes,
+          views: video.views,
+          published_at: video.published_at,
+          description: video.description,
+          comments: video.comments,
+          preview_image: video.preview_image,
+          youtuber_id: video.youtuber_id,
+          updated_at: new Date().toISOString(),
+        }))
+      );
+
+      if (error) {
+        console.error('Error saving videos:', error);
+        throw error;
+      }
+
+      // Refresh videos list
+      queryClient.invalidateQueries({ queryKey: ['videos', id] });
+      Alert.alert('Success', `${newVideos.length} videos updated successfully`);
+    } catch (error: any) {
+      console.error('Error in collectVideos:', error);
       Alert.alert('Error', error.message);
-      return;
     }
-
-    console.log(data);
-
-    // router.push(`/job/${data.id}`);
   };
 
   if (isLoading) {
-    return <Text>Loading...</Text>;
+    return (
+      <View className="flex-1 items-center justify-center">
+        <ActivityIndicator size="large" />
+      </View>
+    );
   }
 
   if (error) {
-    return <Text>Error: {error.message}</Text>;
+    return (
+      <View className="flex-1 items-center justify-center">
+        <Text className="text-red-500">Error: {error.message}</Text>
+      </View>
+    );
   }
 
   return (
     <ScrollView className="flex-1">
       <Stack.Screen options={{ title: channel.name }} />
-      {/* Banner Image */}
-      <Image source={{ uri: channel.banner_img }} className="h-40 w-full object-cover" />
 
-      <View className="p-4">
-        {/* Profile Section */}
-        <View className="flex-row items-center gap-4">
-          <Image source={{ uri: channel.profile_image }} className="h-20 w-20 rounded-full" />
-          <View className="flex-1">
-            <Text className="text-2xl font-bold">{channel.name}</Text>
-            <Text className="text-gray-600">{channel.handle}</Text>
-            <View className="mt-2 flex-row gap-4">
-              <Text className="text-gray-600">
-                {channel.subscribers.toLocaleString()} subscribers
-              </Text>
-              <Text className="text-gray-600">{channel.videos_count} videos</Text>
+      {/* Channel Header */}
+      <View>
+        {channel.banner_img && (
+          <Image source={{ uri: channel.banner_img }} className="h-32 w-full object-cover" />
+        )}
+        <View className="p-4">
+          <View className="flex-row items-center">
+            <Image source={{ uri: channel.profile_image }} className="h-20 w-20 rounded-full" />
+            <View className="ml-4">
+              <Text className="text-2xl font-bold">{channel.name}</Text>
+              <Text className="text-gray-600">{channel.subscribers} subscribers</Text>
             </View>
           </View>
+          <Text className="mt-4">{channel.description}</Text>
+        </View>
+      </View>
+
+      {/* Videos Section */}
+      <View className="p-4">
+        <View className="flex-row items-center justify-between">
+          <Text className="text-xl font-bold">Videos</Text>
+          <Button onPress={collectVideos} loading={videosLoading}>
+            Refresh Videos
+          </Button>
         </View>
 
-        {/* Description */}
-        <Text className="mt-6 text-gray-800" numberOfLines={5}>
-          {channel.Description}
-        </Text>
-
-        {/* Stats Grid */}
-        <View className="mt-6 flex-row justify-between rounded-lg bg-gray-50 p-4">
-          <View className="items-center">
-            <Text className="text-xl font-bold">{(channel.views / 1000000).toFixed(1)}M</Text>
-            <Text className="text-gray-600">Total Views</Text>
+        {videosLoading ? (
+          <ActivityIndicator className="my-4" />
+        ) : videosError ? (
+          <Text className="text-red-500">Error loading videos</Text>
+        ) : videos?.length === 0 ? (
+          <Text className="my-4 text-gray-500">No videos found. Click Refresh Videos to fetch latest videos.</Text>
+        ) : (
+          <View className="mt-4">
+            {videos?.map((video) => (
+              <Link key={video.id} href={`/video/${video.id}`} asChild>
+                <Pressable className="mb-4 rounded-lg border border-gray-200 overflow-hidden">
+                  <Image source={{ uri: video.preview_image }} className="h-48 w-full object-cover" />
+                  <View className="p-4">
+                    <Text className="text-lg font-semibold">{video.title}</Text>
+                    <Text className="text-gray-600">{video.views} views</Text>
+                  </View>
+                </Pressable>
+              </Link>
+            ))}
           </View>
-          <View className="items-center">
-            <Text className="text-xl font-bold">
-              {new Date(channel.created_date).getFullYear()}
-            </Text>
-            <Text className="text-gray-600">Joined</Text>
-          </View>
-          <View className="items-center">
-            <Text className="text-xl font-bold">{channel.location}</Text>
-            <Text className="text-gray-600">Location</Text>
-          </View>
-        </View>
-
-        <Text className="mb-5 mt-6 text-gray-800">Videos</Text>
-        <Button title="Collect Videos" onPress={collectVideos} />
-        {(videos || []).map((video) => (
-          <Link href={`/video/${video.id}`} asChild key={video.id}>
-            <Pressable className="my-4 rounded-lg border border-gray-200 p-4">
-              <Image
-                source={{ uri: video.preview_image }}
-                className="h-48 w-full rounded-lg object-cover"
-              />
-              <Text className="mt-2 text-lg font-semibold">{video.title}</Text>
-              <View className="mt-2 flex-row justify-between">
-                <Text className="text-gray-600">{video.views.toLocaleString()} views</Text>
-                <Text className="text-gray-600">
-                  {new Date(video.date_posted).toLocaleDateString()}
-                </Text>
-              </View>
-              <View className="mt-2 flex-row gap-4">
-                <Text className="text-gray-600">{video.likes.toLocaleString()} likes</Text>
-              </View>
-            </Pressable>
-          </Link>
-        ))}
+        )}
       </View>
     </ScrollView>
   );
