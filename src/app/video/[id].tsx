@@ -1,131 +1,138 @@
-import { useQuery } from '@tanstack/react-query';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { View, Text, Image, ScrollView, ActivityIndicator } from 'react-native';
-import { supabase } from '~/lib/supabase';
-import { useTheme } from '~/context/ThemeContext';
-import { lightTheme, darkTheme } from '~/theme/colors';
+import React from 'react';
+import { View, Text, ScrollView, Image, ActivityIndicator, StyleSheet } from 'react-native';
+import { useLocalSearchParams } from 'expo-router';
+import { VideoAnalysis } from '~/components/VideoAnalysis';
+import { fetchVideo } from '~/lib/youtube';
 
-const fetchVideo = async (id: string) => {
-  const { data, error } = await supabase
-    .from('yt_videos')
-    .select('*, yt_channels!inner(*)')
-    .eq('id', id)
-    .limit(1);
+export default function VideoPage() {
+  const { id } = useLocalSearchParams();
+  const [video, setVideo] = React.useState<any>(null);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
 
-  if (error) {
-    throw error;
-  }
-  if (!data || data.length === 0) {
-    throw new Error('Video not found');
-  }
-  return data[0];
-};
+  React.useEffect(() => {
+    const loadVideo = async () => {
+      try {
+        setLoading(true);
+        const data = await fetchVideo(id as string);
+        setVideo(data);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load video');
+      } finally {
+        setLoading(false);
+      }
+    };
 
-export default function Video() {
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const { isDark } = useTheme();
-  const theme = isDark ? darkTheme : lightTheme;
+    loadVideo();
+  }, [id]);
 
-  const {
-    data: video,
-    isLoading,
-    error,
-  } = useQuery({
-    queryKey: ['video', id],
-    queryFn: () => fetchVideo(id),
-  });
-
-  if (isLoading) {
+  if (loading) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.background }}>
-        <ActivityIndicator size="large" color={theme.text} />
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" />
       </View>
     );
   }
 
   if (error) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.background }}>
-        <Text style={{ color: theme.error }}>Error: {error.message}</Text>
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>{error}</Text>
       </View>
     );
+  }
+
+  if (!video) {
+    return null;
   }
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: theme.background }}>
-      <Stack.Screen
-        options={{
-          title: video.title,
-          headerStyle: {
-            backgroundColor: theme.card,
-            borderBottomColor: theme.border,
-          },
-          headerTintColor: theme.text,
-          headerTitleStyle: {
-            color: theme.text,
-          },
-        }}
-      />
+    <View style={styles.container}>
+      <ScrollView style={styles.scrollView}>
+        <View style={styles.content}>
+          <Text style={styles.title}>{video.title}</Text>
 
-      {/* Video Preview */}
-      <Image
-        source={{ uri: video.preview_image }}
-        style={{ height: 224, width: '100%', resizeMode: 'cover' }}
-      />
+          <View style={styles.statsContainer}>
+            <Text style={styles.stat}>Views: {video.views}</Text>
+            <Text style={styles.stat}>Likes: {video.likes}</Text>
+            <Text style={styles.stat}>Comments: {video.comments}</Text>
+          </View>
 
-      {/* Video Info */}
-      <View style={{ padding: 16 }}>
-        <Text style={{ fontSize: 24, fontWeight: 'bold', color: theme.text }}>{video.title}</Text>
-
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
           <Image
-            source={{ uri: video.yt_channels.profile_image }}
-            style={{ width: 40, height: 40, borderRadius: 20 }}
+            source={{ uri: video.preview_image }}
+            style={styles.thumbnail}
+            resizeMode="cover"
           />
-          <View style={{ marginLeft: 12 }}>
-            <Text style={{ fontWeight: '600', color: theme.text }}>{video.yt_channels.name}</Text>
-            <Text style={{ color: theme.textSecondary }}>{video.yt_channels.subscribers} subscribers</Text>
-          </View>
-        </View>
 
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 16 }}>
-          <View>
-            <Text style={{ color: theme.textSecondary }}>{video.views} views</Text>
-            <Text style={{ color: theme.textSecondary }}>{new Date(video.published_at).toLocaleDateString()}</Text>
-          </View>
-          <View>
-            <Text style={{ color: theme.textSecondary }}>{video.likes} likes</Text>
-            <Text style={{ color: theme.textSecondary }}>{video.comments} comments</Text>
-          </View>
+          <Text style={styles.description}>{video.description}</Text>
         </View>
+      </ScrollView>
 
-        <View style={{ marginTop: 16 }}>
-          <Text style={{ fontSize: 18, fontWeight: '600', color: theme.text }}>Description</Text>
-          <Text style={{ marginTop: 8, color: theme.textSecondary }}>{video.description}</Text>
-        </View>
-
-        {video.tags && video.tags.length > 0 && (
-          <View style={{ marginTop: 16 }}>
-            <Text style={{ fontSize: 18, fontWeight: '600', color: theme.text }}>Tags</Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 8 }}>
-              {video.tags.map((tag: string, index: number) => (
-                <View
-                  key={index}
-                  style={{
-                    backgroundColor: theme.surface,
-                    borderRadius: 16,
-                    paddingHorizontal: 12,
-                    paddingVertical: 4,
-                    margin: 4
-                  }}
-                >
-                  <Text style={{ color: theme.text }}>{tag}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-        )}
+      <View style={styles.analysisContainer}>
+        <VideoAnalysis videoId={id as string} />
       </View>
-    </ScrollView>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  content: {
+    padding: 16,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  errorContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  errorText: {
+    color: 'red',
+    fontSize: 16,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 16,
+    color: '#333',
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+    backgroundColor: '#f5f5f5',
+    padding: 12,
+    borderRadius: 8,
+  },
+  stat: {
+    fontSize: 16,
+    color: '#666',
+  },
+  thumbnail: {
+    width: '100%',
+    height: 192,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  description: {
+    fontSize: 16,
+    lineHeight: 24,
+    color: '#444',
+    marginBottom: 16,
+  },
+  analysisContainer: {
+    flex: 1,
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+  },
+});
