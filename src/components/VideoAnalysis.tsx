@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, ActivityIndicator, StyleSheet, Platform } from 'react-native';
 import { analyzeVideoSubtitles } from '~/lib/youtube';
 
 interface VideoAnalysisProps {
@@ -80,7 +80,7 @@ export const VideoAnalysis: React.FC<VideoAnalysisProps> = ({ videoId }) => {
                     </View>
                 </View>
 
-                {sections.map((section, index) => (
+                {sections.map((section: string, index: number) => (
                     <View key={index} style={styles.section}>
                         <Text style={styles.sectionTitle}>
                             {section.split('\n')[0]}
@@ -90,6 +90,41 @@ export const VideoAnalysis: React.FC<VideoAnalysisProps> = ({ videoId }) => {
                         </Text>
                     </View>
                 ))}
+
+                {analysis.contentAnalysis && (
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>Content Analysis</Text>
+                        <Text style={styles.contentText}>{analysis.contentAnalysis}</Text>
+                    </View>
+                )}
+
+                {analysis.actualCode && (
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>Code from Video</Text>
+                        <View style={styles.codeContainer}>
+                            <Text style={styles.codeText}>{analysis.actualCode}</Text>
+                        </View>
+                    </View>
+                )}
+
+                {analysis.codeSnippets && analysis.codeSnippets.length > 0 && (
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>Code Snippets</Text>
+                        {analysis.codeSnippets.map((snippet: string, index: number) => (
+                            <View key={index} style={styles.codeSnippetContainer}>
+                                <Text style={styles.codeSnippetTitle}>Snippet {index + 1}</Text>
+                                <Text style={styles.codeSnippetText}>{snippet}</Text>
+                            </View>
+                        ))}
+                    </View>
+                )}
+
+                {analysis.summary && (
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>Summary</Text>
+                        <Text style={styles.summaryText}>{analysis.summary}</Text>
+                    </View>
+                )}
 
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Description</Text>
@@ -169,7 +204,6 @@ const styles = StyleSheet.create({
     },
     analysisText: {
         lineHeight: 24,
-        whiteSpace: 'pre-line',
         color: '#444',
     },
     descriptionText: {
@@ -202,5 +236,50 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         marginTop: 8,
         padding: 8,
+    },
+    noteText: {
+        fontSize: 14,
+        color: '#444',
+        lineHeight: 20,
+        marginBottom: 12,
+        paddingLeft: 8,
+    },
+    codeSnippetContainer: {
+        backgroundColor: '#f8f9fa',
+        padding: 12,
+        borderRadius: 6,
+        marginBottom: 12,
+    },
+    codeSnippetTitle: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        color: '#2196F3',
+        marginBottom: 8,
+    },
+    codeSnippetText: {
+        fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+        fontSize: 14,
+        color: '#333',
+        lineHeight: 20,
+    },
+    codeContainer: {
+        backgroundColor: '#f8f9fa',
+        padding: 12,
+        borderRadius: 6,
+        marginBottom: 12,
+    },
+    codeText: {
+        fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+        fontSize: 14,
+        color: '#333',
+        lineHeight: 20,
+    },
+    contentText: {
+        lineHeight: 20,
+        color: '#444',
+    },
+    summaryText: {
+        lineHeight: 20,
+        color: '#444',
     },
 }); 

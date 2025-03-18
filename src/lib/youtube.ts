@@ -336,11 +336,378 @@ Provide a concise analysis in this format:
   }
 };
 
+// Helper function to detect if text contains code snippets
+function containsCodeSnippets(text: string): boolean {
+  const codeIndicators = [
+    /\b(function|class|const|let|var|if|else|for|while|return|import|export)\b/,
+    /\b(public|private|protected|void|int|string|boolean|array)\b/,
+    /\b(console\.log|print|def|import|from|return)\b/,
+    /\b(html|css|javascript|python|java|c\+\+|php|ruby|swift|kotlin)\b/i,
+    /\b(api|database|server|client|framework|library)\b/i,
+    /\b(git|github|docker|kubernetes|aws|azure)\b/i,
+    /\b(algorithm|data structure|programming|development)\b/i,
+  ];
+  
+  return codeIndicators.some(pattern => pattern.test(text));
+}
+
+// Helper function to extract code snippets from text
+function extractCodeSnippets(text: string): string[] {
+  const codeBlocks = text.match(/```[\s\S]*?```/g) || [];
+  const inlineCode = text.match(/`[^`]+`/g) || [];
+  
+  return [...codeBlocks, ...inlineCode].map(code => code.replace(/```/g, '').replace(/`/g, ''));
+}
+
+// Helper function to generate short notes from transcript
+function generateShortNotes(transcript: string): { points: string[], codeSnippets: string[] } {
+  // Split transcript into sentences
+  const sentences = transcript.split(/[.!?]+/).filter(s => s.trim().length > 0);
+  
+  // Group sentences into chunks of 2-3 sentences
+  const chunks: string[] = [];
+  for (let i = 0; i < sentences.length; i += 2) {
+    const chunk = sentences.slice(i, i + 2).join('. ').trim();
+    if (chunk) {
+      chunks.push(chunk);
+    }
+  }
+  
+  // Check if content is coding-related
+  const isCodingRelated = containsCodeSnippets(transcript);
+  const codeSnippets = isCodingRelated ? extractCodeSnippets(transcript) : [];
+  
+  // Convert chunks into numbered points
+  const points = chunks.map((chunk, index) => `${index + 1}. ${chunk}`);
+  
+  return { points, codeSnippets };
+}
+
+// Helper function to detect if content is DSA-related
+function isDSARelated(text: string): boolean {
+  const dsaKeywords = [
+    // Data Structures
+    /\b(array|linked list|stack|queue|tree|graph|hash table|heap|trie)\b/i,
+    // Algorithms
+    /\b(sorting|searching|binary search|bubble sort|quick sort|merge sort|insertion sort|selection sort)\b/i,
+    /\b(depth first search|breadth first search|dfs|bfs|dijkstra|kruskal|prim)\b/i,
+    // Complexity
+    /\b(time complexity|space complexity|big o|o\(n\)|o\(n\^2\)|o\(log n\))\b/i,
+    // Problem Solving
+    /\b(algorithm|problem solving|optimization|recursion|iteration|dynamic programming)\b/i,
+  ];
+  
+  return dsaKeywords.some(pattern => pattern.test(text));
+}
+
+// Helper function to generate pseudo code from transcript
+function generatePseudoCode(transcript: string): string {
+  // Split transcript into sentences
+  const sentences = transcript.split(/[.!?]+/).filter(s => s.trim().length > 0);
+  
+  // Look for algorithm-related sentences
+  const algorithmPatterns = [
+    /\b(algorithm|function|method|procedure|step|loop|if|else|return|while|for)\b/i,
+    /\b(initialize|declare|create|set|assign|update|increment|decrement)\b/i,
+    /\b(compare|check|verify|validate|test|condition)\b/i,
+    /\b(iterate|traverse|loop through|go through|process)\b/i,
+    /\b(store|save|keep|maintain|hold)\b/i,
+    /\b(calculate|compute|determine|find|search)\b/i,
+    /\b(swap|exchange|replace|update|modify)\b/i,
+    /\b(merge|combine|join|connect|link)\b/i,
+    /\b(split|divide|partition|separate)\b/i,
+    /\b(sort|arrange|order|organize)\b/i,
+  ];
+
+  // Filter and clean algorithm-related sentences
+  const algorithmSentences = sentences.filter(sentence => 
+    algorithmPatterns.some(pattern => pattern.test(sentence))
+  );
+
+  if (algorithmSentences.length === 0) return '';
+
+  // Clean and format sentences into logical steps
+  const logicalSteps = algorithmSentences
+    .slice(0, 8) // Limit to 8 steps
+    .map((sentence, index) => {
+      // Clean the sentence
+      let step = sentence.trim()
+        .replace(/\b(algorithm|function|method|procedure)\b/i, '')
+        .replace(/\b(step|loop|if|else|return|while|for)\b/i, match => match.toUpperCase())
+        .replace(/\b(initialize|declare|create|set|assign)\b/i, 'SET')
+        .replace(/\b(compare|check|verify|validate|test)\b/i, 'CHECK')
+        .replace(/\b(iterate|traverse|loop through|go through|process)\b/i, 'ITERATE')
+        .replace(/\b(store|save|keep|maintain|hold)\b/i, 'STORE')
+        .replace(/\b(calculate|compute|determine|find|search)\b/i, 'CALCULATE')
+        .replace(/\b(swap|exchange|replace|update|modify)\b/i, 'UPDATE')
+        .replace(/\b(merge|combine|join|connect|link)\b/i, 'MERGE')
+        .replace(/\b(split|divide|partition|separate)\b/i, 'SPLIT')
+        .replace(/\b(sort|arrange|order|organize)\b/i, 'SORT')
+        .trim();
+
+      // Add step number
+      return `${index + 1}. ${step}`;
+    });
+
+  // Generate the complete pseudocode
+  const pseudocode = [
+    'Algorithm Steps:',
+    ...logicalSteps
+  ].join('\n');
+
+  return pseudocode;
+}
+
+// Helper function to detect specific DSA problem type
+function detectProblemType(text: string): string {
+  const problemTypes = {
+    array: [
+      /\b(array|arraylist|vector|dynamic array)\b/i,
+      /\b(insert|delete|search|find|sort|reverse)\b.*\b(array|element)\b/i,
+      /\b(two pointer|sliding window|subarray|subsequence)\b/i,
+    ],
+    linkedList: [
+      /\b(linked list|singly linked|doubly linked|circular linked)\b/i,
+      /\b(node|pointer|next|prev)\b.*\b(linked list)\b/i,
+      /\b(insert|delete|reverse|merge|detect cycle)\b.*\b(linked list)\b/i,
+    ],
+    tree: [
+      /\b(tree|binary tree|bst|binary search tree|avl|red black)\b/i,
+      /\b(node|root|leaf|parent|child|height|depth)\b.*\b(tree)\b/i,
+      /\b(traverse|inorder|preorder|postorder|level order)\b/i,
+    ],
+    graph: [
+      /\b(graph|directed|undirected|weighted|unweighted)\b/i,
+      /\b(vertex|edge|adjacency|matrix|list)\b/i,
+      /\b(dfs|bfs|dijkstra|kruskal|prim|shortest path)\b/i,
+    ],
+    sorting: [
+      /\b(sort|bubble|quick|merge|insertion|selection|heap)\b.*\b(sort)\b/i,
+      /\b(ascending|descending|order|comparison|swap)\b/i,
+    ],
+    searching: [
+      /\b(search|binary search|linear search|find|lookup)\b/i,
+      /\b(target|key|element|value)\b.*\b(search)\b/i,
+    ],
+  };
+
+  for (const [type, patterns] of Object.entries(problemTypes)) {
+    if (patterns.some(pattern => pattern.test(text))) {
+      return type;
+    }
+  }
+  return '';
+}
+
+// Helper function to generate Java code based on problem type
+function generateJavaCode(problemType: string, transcript: string): string {
+  const codeTemplates = {
+    array: `public class ArraySolution {
+    // Method to solve array problem
+    public static void solve(int[] arr) {
+        // Initialize variables
+        int n = arr.length;
+        
+        // Your solution logic here
+        for (int i = 0; i < n; i++) {
+            // Process array elements
+        }
+    }
+    
+    // Main method for testing
+    public static void main(String[] args) {
+        int[] arr = {1, 2, 3, 4, 5}; // Example array
+        solve(arr);
+    }
+}`,
+    linkedList: `public class ListNode {
+    int val;
+    ListNode next;
+    
+    ListNode(int val) {
+        this.val = val;
+        this.next = null;
+    }
+}
+
+public class LinkedListSolution {
+    // Method to solve linked list problem
+    public static ListNode solve(ListNode head) {
+        // Your solution logic here
+        return head;
+    }
+    
+    // Main method for testing
+    public static void main(String[] args) {
+        // Create example linked list
+        ListNode head = new ListNode(1);
+        head.next = new ListNode(2);
+        head.next.next = new ListNode(3);
+        
+        solve(head);
+    }
+}`,
+    tree: `public class TreeNode {
+    int val;
+    TreeNode left;
+    TreeNode right;
+    
+    TreeNode(int val) {
+        this.val = val;
+        this.left = null;
+        this.right = null;
+    }
+}
+
+public class TreeSolution {
+    // Method to solve tree problem
+    public static void solve(TreeNode root) {
+        // Your solution logic here
+    }
+    
+    // Main method for testing
+    public static void main(String[] args) {
+        // Create example tree
+        TreeNode root = new TreeNode(1);
+        root.left = new TreeNode(2);
+        root.right = new TreeNode(3);
+        
+        solve(root);
+    }
+}`,
+    graph: `import java.util.*;
+
+public class GraphSolution {
+    // Method to solve graph problem
+    public static void solve(int[][] graph) {
+        int n = graph.length;
+        
+        // Your solution logic here
+        for (int i = 0; i < n; i++) {
+            // Process graph vertices
+        }
+    }
+    
+    // Main method for testing
+    public static void main(String[] args) {
+        // Example adjacency matrix
+        int[][] graph = {
+            {0, 1, 1},
+            {1, 0, 1},
+            {1, 1, 0}
+        };
+        
+        solve(graph);
+    }
+}`,
+    sorting: `public class SortingSolution {
+    // Method to implement sorting algorithm
+    public static void sort(int[] arr) {
+        int n = arr.length;
+        
+        // Your sorting logic here
+        for (int i = 0; i < n; i++) {
+            // Sorting implementation
+        }
+    }
+    
+    // Main method for testing
+    public static void main(String[] args) {
+        int[] arr = {64, 34, 25, 12, 22, 11, 90};
+        sort(arr);
+        
+        // Print sorted array
+        for (int num : arr) {
+            System.out.print(num + " ");
+        }
+    }
+}`,
+    searching: `public class SearchingSolution {
+    // Method to implement searching algorithm
+    public static int search(int[] arr, int target) {
+        int n = arr.length;
+        
+        // Your searching logic here
+        for (int i = 0; i < n; i++) {
+            if (arr[i] == target) {
+                return i;
+            }
+        }
+        return -1;
+    }
+    
+    // Main method for testing
+    public static void main(String[] args) {
+        int[] arr = {1, 2, 3, 4, 5};
+        int target = 3;
+        
+        int result = search(arr, target);
+        System.out.println("Element found at index: " + result);
+    }
+}`
+  };
+
+  return codeTemplates[problemType] || '';
+}
+
+// Helper function to extract actual code from transcript
+function extractActualCode(transcript: string): string {
+  // Look for code blocks in the transcript
+  const codePatterns = [
+    // Match code blocks with language specification
+    /```(java|javascript|python|cpp|c\+\+|c#|php|ruby|swift|kotlin)\n([\s\S]*?)```/g,
+    // Match code blocks without language specification
+    /```\n([\s\S]*?)```/g,
+    // Match inline code
+    /`([^`]+)`/g,
+    // Match code-like patterns
+    /\b(public|private|protected|class|interface|enum|void|int|long|float|double|boolean|char|String|Array|List|Map|Set)\b[\s\S]*?\{[\s\S]*?\}/g,
+    // Match function/method definitions
+    /\b(function|def|public|private|protected)\s+\w+\s*\([^)]*\)\s*\{[\s\S]*?\}/g,
+  ];
+
+  let extractedCode = '';
+
+  for (const pattern of codePatterns) {
+    const matches = transcript.match(pattern);
+    if (matches) {
+      // Clean and format the code
+      const code = matches.map(match => {
+        // Remove language specifiers and backticks
+        return match.replace(/```(?:java|javascript|python|cpp|c\+\+|c#|php|ruby|swift|kotlin)?\n?/, '')
+                   .replace(/```/g, '')
+                   .replace(/`/g, '')
+                   .trim();
+      }).join('\n\n');
+
+      if (code) {
+        extractedCode = code;
+        break; // Use the first pattern that finds code
+      }
+    }
+  }
+
+  return extractedCode;
+}
+
+// Helper function to decode HTML entities
+function decodeHTMLEntities(text: string): string {
+  return text
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&nbsp;/g, ' ');
+}
+
+// Update the analyzeVideoSubtitles function
 export const analyzeVideoSubtitles = async (videoId: string) => {
   try {
     // Get video subtitles first
     const transcript = await YoutubeTranscript.fetchTranscript(videoId);
-    const fullText = transcript.map(item => item.text).join(' ');
+    const fullText = transcript.map(item => decodeHTMLEntities(item.text)).join(' ');
 
     // Get video details
     const videoResponse = await fetch(
@@ -375,31 +742,48 @@ export const analyzeVideoSubtitles = async (videoId: string) => {
       ? ((commentCount / viewCount) * 100).toFixed(2) 
       : '0';
 
+    // Generate short notes and code snippets from transcript
+    const { points, codeSnippets } = generateShortNotes(fullText);
+
+    // Extract actual code from transcript
+    const actualCode = extractActualCode(fullText);
+    const problemType = detectProblemType(fullText);
+
     // Generate content analysis
-    const contentAnalysis = `Video Analysis:
-
-Title: ${video.snippet?.title}
-Published: ${new Date(video.snippet?.publishedAt || '').toLocaleDateString()}
-Duration: ${estimateDuration(fullText)}
-
-Performance Metrics:
-- Views: ${video.statistics?.viewCount || '0'}
-- Likes: ${video.statistics?.likeCount || '0'}
-- Comments: ${video.statistics?.commentCount || '0'}
-- Engagement Rate: ${engagementRate}% (likes per view)
-- Comment Rate: ${commentRate}% (comments per view)
-
-Content Analysis:
-- Main Topic: ${video.snippet?.title}
-- Content Type: ${video.snippet?.tags?.join(', ') || 'Not specified'}
-- Key Keywords: ${keywords.join(', ')}
-- Video Length: ${estimateDuration(fullText)}
-
-Summary:
-${video.snippet?.description?.slice(0, 200)}...
-
-Transcript Preview:
-${fullText.slice(0, 200)}...`;
+    const contentAnalysis = [
+      'Performance Metrics:',
+      `- Views: ${video.statistics?.viewCount || '0'}`,
+      `- Likes: ${video.statistics?.likeCount || '0'}`,
+      `- Comments: ${video.statistics?.commentCount || '0'}`,
+      `- Engagement Rate: ${engagementRate}% (likes per view)`,
+      `- Comment Rate: ${commentRate}% (comments per view)`,
+      '',
+      'Content Analysis:',
+      `- Main Topic: ${video.snippet?.title}`,
+      `- Content Type: ${video.snippet?.tags?.join(', ') || 'Not specified'}`,
+      `- Key Keywords: ${keywords.join(', ')}`,
+      `- Video Length: ${estimateDuration(fullText)}`,
+      '',
+      actualCode ? [
+        'Code from Video:',
+        '```java',
+        actualCode,
+        '```',
+        ''
+      ].join('\n') : '',
+      codeSnippets.length > 0 ? [
+        'Code Snippets:',
+        ...codeSnippets.map((code, index) => [
+          `\nSnippet ${index + 1}:`,
+          '```',
+          code,
+          '```'
+        ].join('\n'))
+      ].join('\n') : '',
+      '',
+      'Summary:',
+      `${video.snippet?.description?.slice(0, 200)}...`
+    ].filter(Boolean).join('\n');
 
     // Prepare the complete analysis
     const analysis = {
@@ -411,6 +795,10 @@ ${fullText.slice(0, 200)}...`;
       commentCount: video.statistics?.commentCount || '0',
       transcript: fullText,
       contentAnalysis,
+      shortNotes: points,
+      codeSnippets,
+      actualCode,
+      problemType,
       summary: `This video titled "${video.snippet?.title}" was published on ${new Date(video.snippet?.publishedAt || '').toLocaleDateString()}. 
                 It has ${video.statistics?.viewCount || '0'} views, ${video.statistics?.likeCount || '0'} likes, and ${video.statistics?.commentCount || '0'} comments.
                 The video discusses: ${fullText.substring(0, 200)}...`,
@@ -427,6 +815,10 @@ ${fullText.slice(0, 200)}...`;
       commentCount: '0',
       transcript: 'Transcript not available',
       contentAnalysis: `Error analyzing video: ${error instanceof Error ? error.message : 'Unknown error'}. Please check your YouTube API key and try again.`,
+      shortNotes: [],
+      codeSnippets: [],
+      actualCode: '',
+      problemType: '',
       summary: 'Unable to analyze video content. Please try again later.',
     };
   }
