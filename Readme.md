@@ -35,3 +35,6 @@ WHERE id IN (
     ORDER BY updated_at ASC 
     LIMIT 500
 );
+
+### based on subtitle analyse the video and give proepr desciption
+

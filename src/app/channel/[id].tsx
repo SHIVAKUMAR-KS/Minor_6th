@@ -60,6 +60,9 @@ const styles = StyleSheet.create({
   },
 });
 
+// Update cache duration to 7 days to reduce API calls
+const ANALYSIS_CACHE_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
+
 const fetchChannel = async (id: string) => {
   const { data, error } = await supabase
     .from('yt_channels')
@@ -84,33 +87,116 @@ const fetchVideos = async (id: string) => {
   return data;
 };
 
+const fetchChannelAnalysis = async (channelId: string) => {
+  try {
+    // First check local storage for even faster access
+    const { data, error } = await supabase
+      .from('channel_analysis')
+      .select('*')
+      .eq('channel_id', channelId)
+      .order('updated_at', { ascending: false })
+      .limit(1);
+
+    if (error) {
+      console.error('Error fetching analysis:', error);
+      return null;
+    }
+
+    // Check if we have any analysis
+    if (data && data.length > 0) {
+      const lastAnalysis = data[0];
+      const analysisAge = Date.now() - new Date(lastAnalysis.updated_at).getTime();
+
+      // Use cached analysis if:
+      // 1. It's less than 7 days old OR
+      // 2. Channel hasn't posted new videos since last analysis
+      if (analysisAge < ANALYSIS_CACHE_DURATION) {
+        console.log('Using cached analysis (within cache duration)');
+        return lastAnalysis.analysis;
+      }
+    }
+    return null;
+  } catch (error) {
+    console.error('Error in fetchChannelAnalysis:', error);
+    return null;
+  }
+};
+
+const saveChannelAnalysis = async (channelId: string, analysis: string) => {
+  try {
+    console.log('Saving analysis for channel:', channelId);
+
+    const { error } = await supabase
+      .from('channel_analysis')
+      .upsert({
+        channel_id: channelId,
+        analysis: analysis,
+        updated_at: new Date().toISOString(),
+      }, {
+        onConflict: 'channel_id',
+        ignoreDuplicates: false
+      });
+
+    if (error) {
+      console.error('Error saving analysis:', error);
+      // Log more details about the error
+      console.error('Error details:', {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint
+      });
+    } else {
+      console.log('Analysis saved successfully');
+    }
+  } catch (error) {
+    console.error('Error in saveChannelAnalysis:', error);
+  }
+};
+
 const analyzeChannel = async (channel: any, videos: any[], retryCount = 0) => {
   try {
+    // Always check cache first
+    const cachedAnalysis = await fetchChannelAnalysis(channel.id);
+    if (cachedAnalysis) {
+      return cachedAnalysis;
+    }
+
+    // If no cache, check if we should use fallback
+    const shouldUseFallback = () => {
+      const hour = new Date().getHours();
+      // Use fallback during peak hours (8 AM - 8 PM)
+      return hour >= 8 && hour <= 20;
+    };
+
+    if (shouldUseFallback()) {
+      console.log('Peak hours detected, using fallback analysis');
+      const fallbackAnalysis = generateFallbackAnalysis(channel, videos);
+      await saveChannelAnalysis(channel.id, fallbackAnalysis);
+      return fallbackAnalysis;
+    }
+
     const apiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY;
     if (!apiKey) {
       console.error('OpenAI API key is not set');
       return generateFallbackAnalysis(channel, videos);
     }
 
-    // Create a more focused prompt
-    const prompt = `Analyze this YouTube channel and provide a brief, focused analysis:
-
+    // Simplified prompt to reduce tokens
+    const prompt = `Analyze YouTube channel:
 Channel: ${channel.name}
 Subscribers: ${channel.subscribers}
-Total Videos: ${channel.videos_count}
-Total Views: ${channel.views}
+Videos: ${channel.videos_count}
+Views: ${channel.views}
 Description: ${channel.description}
 
-Latest Videos:
-${videos.slice(0, 3).map(v => `- ${v.title} (${v.views} views)`).join('\n')}
-
-Provide a concise analysis in this format:
-Niche: [Channel's main focus]
-Target Audience: [Who they're targeting]
-Content Strategy: [Key approach]
-Growth Potential: [High/Medium/Low]
-Key Strengths: [2-3 main strengths]
-Areas for Improvement: [2-3 suggestions]`;
+Format:
+Niche: [focus]
+Audience: [target]
+Strategy: [approach]
+Growth: [High/Medium/Low]
+Strengths: [2 points]
+Improve: [2 points]`;
 
     console.log('Making OpenAI API request...');
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -123,42 +209,31 @@ Areas for Improvement: [2-3 suggestions]`;
         model: 'gpt-3.5-turbo',
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.7,
-        max_tokens: 300,
+        max_tokens: 200, // Reduced tokens
       }),
     });
 
-    const errorData = await response.json().catch(() => ({}));
-
-    // Check for quota error
-    if (errorData.error?.error?.code === 'insufficient_quota') {
-      console.log('OpenAI quota exceeded, using fallback analysis');
-      return generateFallbackAnalysis(channel, videos);
+    // If we hit any API issues, use fallback immediately
+    if (!response.ok || response.status === 429) {
+      console.log('API issue detected, using fallback analysis');
+      const fallbackAnalysis = generateFallbackAnalysis(channel, videos);
+      await saveChannelAnalysis(channel.id, fallbackAnalysis);
+      return fallbackAnalysis;
     }
 
-    if (response.status === 429 && retryCount < 3) {
-      const retryAfter = parseInt(response.headers.get('retry-after') || '60');
-      console.log(`Rate limit hit. Waiting ${retryAfter} seconds before retry ${retryCount + 1}/3`);
-      await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
-      return analyzeChannel(channel, videos, retryCount + 1);
-    }
-
-    if (!response.ok) {
-      console.error('OpenAI API Error:', {
-        status: response.status,
-        statusText: response.statusText,
-        error: errorData,
-      });
-      return generateFallbackAnalysis(channel, videos);
-    }
-
-    if (!errorData.choices?.[0]?.message?.content) {
+    const data = await response.json();
+    if (!data.choices?.[0]?.message?.content) {
       throw new Error('Invalid response format from OpenAI');
     }
 
-    return errorData.choices[0].message.content;
+    const analysis = data.choices[0].message.content;
+    await saveChannelAnalysis(channel.id, analysis);
+    return analysis;
   } catch (error) {
     console.error('Error analyzing channel:', error);
-    return generateFallbackAnalysis(channel, videos);
+    const fallbackAnalysis = generateFallbackAnalysis(channel, videos);
+    await saveChannelAnalysis(channel.id, fallbackAnalysis);
+    return fallbackAnalysis;
   }
 };
 
