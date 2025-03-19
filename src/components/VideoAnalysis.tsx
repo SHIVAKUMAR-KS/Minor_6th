@@ -60,6 +60,30 @@ export const VideoAnalysis: React.FC<VideoAnalysisProps> = ({ videoId }) => {
     // Split the content analysis into sections
     const sections = analysis.contentAnalysis.split('\n\n').filter(Boolean);
 
+    const renderGitHubContent = () => {
+        if (!analysis.githubUrl) return null;
+
+        return (
+            <View style={styles.section}>
+                <Text style={styles.sectionTitle}>GitHub Content</Text>
+                <Text style={styles.githubUrl}>{analysis.githubUrl}</Text>
+                {analysis.githubFileType === 'pdf' ? (
+                    <Text style={styles.noteText}>
+                        This link contains a PDF file. Please visit the GitHub URL to view it.
+                    </Text>
+                ) : !analysis.githubCode ? (
+                    <Text style={styles.noteText}>
+                        Unable to fetch code content. Please visit the GitHub URL directly.
+                    </Text>
+                ) : (
+                    <View style={styles.codeContainer}>
+                        <Text style={styles.codeText}>{analysis.githubCode}</Text>
+                    </View>
+                )}
+            </View>
+        );
+    };
+
     return (
         <ScrollView style={styles.container}>
             <View style={styles.content}>
@@ -79,6 +103,8 @@ export const VideoAnalysis: React.FC<VideoAnalysisProps> = ({ videoId }) => {
                         <Text style={styles.statLabel}>Comments</Text>
                     </View>
                 </View>
+
+                {renderGitHubContent()}
 
                 {sections.map((section: string, index: number) => (
                     <View key={index} style={styles.section}>
@@ -125,11 +151,6 @@ export const VideoAnalysis: React.FC<VideoAnalysisProps> = ({ videoId }) => {
                         <Text style={styles.summaryText}>{analysis.summary}</Text>
                     </View>
                 )}
-
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Description</Text>
-                    <Text style={styles.descriptionText}>{analysis.description}</Text>
-                </View>
 
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Transcript</Text>
@@ -239,10 +260,9 @@ const styles = StyleSheet.create({
     },
     noteText: {
         fontSize: 14,
-        color: '#444',
-        lineHeight: 20,
-        marginBottom: 12,
-        paddingLeft: 8,
+        color: '#666',
+        fontStyle: 'italic',
+        marginTop: 8,
     },
     codeSnippetContainer: {
         backgroundColor: '#f8f9fa',
@@ -266,13 +286,16 @@ const styles = StyleSheet.create({
         backgroundColor: '#f8f9fa',
         padding: 12,
         borderRadius: 6,
-        marginBottom: 12,
+        marginTop: 8,
     },
     codeText: {
-        fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-        fontSize: 14,
+        fontFamily: Platform.select({
+            ios: 'Menlo',
+            android: 'monospace',
+            default: 'Consolas'
+        }),
+        fontSize: 12,
         color: '#333',
-        lineHeight: 20,
     },
     contentText: {
         lineHeight: 20,
@@ -281,5 +304,11 @@ const styles = StyleSheet.create({
     summaryText: {
         lineHeight: 20,
         color: '#444',
+    },
+    githubUrl: {
+        fontSize: 12,
+        color: '#2196F3',
+        marginBottom: 8,
+        textDecorationLine: Platform.OS === 'web' ? 'underline' : 'none',
     },
 }); 

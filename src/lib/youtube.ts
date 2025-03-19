@@ -360,27 +360,24 @@ function extractCodeSnippets(text: string): string[] {
 }
 
 // Helper function to generate short notes from transcript
-function generateShortNotes(transcript: string): { points: string[], codeSnippets: string[] } {
+function generateShortNotes(transcript: string) {
   // Split transcript into sentences
   const sentences = transcript.split(/[.!?]+/).filter(s => s.trim().length > 0);
   
-  // Group sentences into chunks of 2-3 sentences
-  const chunks: string[] = [];
-  for (let i = 0; i < sentences.length; i += 2) {
-    const chunk = sentences.slice(i, i + 2).join('. ').trim();
-    if (chunk) {
-      chunks.push(chunk);
-    }
-  }
-  
-  // Check if content is coding-related
-  const isCodingRelated = containsCodeSnippets(transcript);
-  const codeSnippets = isCodingRelated ? extractCodeSnippets(transcript) : [];
-  
-  // Convert chunks into numbered points
-  const points = chunks.map((chunk, index) => `${index + 1}. ${chunk}`);
-  
-  return { points, codeSnippets };
+  // Convert sentences into bullet points and limit to 5 most important points
+  const points = sentences
+    .map(sentence => sentence.trim())
+    .filter(sentence => sentence.length > 0)
+    .slice(0, 5) // Limit to 5 points
+    .map(sentence => `• ${sentence}`);
+
+  // Extract code snippets
+  const codeSnippets = extractCodeSnippets(transcript);
+
+  return {
+    points,
+    codeSnippets
+  };
 }
 
 // Helper function to detect if content is DSA-related
@@ -702,6 +699,192 @@ function decodeHTMLEntities(text: string): string {
     .replace(/&nbsp;/g, ' ');
 }
 
+// Helper function to generate summary from transcript
+function generateSummary(transcript: string): string {
+  // Split transcript into sentences
+  const sentences = transcript.split(/[.!?]+/).filter(s => s.trim().length > 0);
+  
+  // Group sentences into paragraphs based on content
+  const paragraphs: string[] = [];
+  let currentParagraph: string[] = [];
+  let currentTopic = '';
+  
+  sentences.forEach((sentence, index) => {
+    sentence = sentence.trim();
+    if (sentence.length > 0) {
+      // Extract main topic from sentence
+      const words = sentence.toLowerCase().split(/\s+/);
+      const topic = words.slice(0, 3).join(' ');
+      
+      // Start new paragraph if topic changes or after 3-4 sentences
+      if (currentTopic && topic !== currentTopic && currentParagraph.length >= 3) {
+        paragraphs.push(currentParagraph.join('. ') + '.');
+        currentParagraph = [];
+      }
+      
+      currentParagraph.push(sentence);
+      currentTopic = topic;
+      
+      // Force new paragraph after 4 sentences
+      if (currentParagraph.length >= 4) {
+        paragraphs.push(currentParagraph.join('. ') + '.');
+        currentParagraph = [];
+        currentTopic = '';
+      }
+    }
+  });
+  
+  // Add any remaining sentences as the last paragraph
+  if (currentParagraph.length > 0) {
+    paragraphs.push(currentParagraph.join('. ') + '.');
+  }
+  
+  // Ensure we have at least 2 paragraphs
+  if (paragraphs.length === 0) {
+    return `**${sentences.slice(0, 4)
+      .map(s => s.trim())
+      .filter(s => s.length > 0)
+      .join('. ') + '.'}**`;
+  }
+  
+  // If we have only one paragraph, split it into two
+  if (paragraphs.length === 1) {
+    const sentences = paragraphs[0].split('. ');
+    const midPoint = Math.floor(sentences.length / 2);
+    return `**${[
+      sentences.slice(0, midPoint).join('. ') + '.',
+      sentences.slice(midPoint).join('. ') + '.'
+    ].join('\n\n')}**`;
+  }
+  
+  // Return all paragraphs with proper spacing and bold formatting
+  return `**${paragraphs.join('\n\n')}**`;
+}
+
+// Helper function to extract GitHub file URL from description
+async function extractGitHubFileUrl(description: string): Promise<{ url: string; fileType: string } | null> {
+  try {
+    // Look for code solution mentions with nearby GitHub links
+    const solutionPatterns = [
+      /(?:my solution|code solution|solution:?\s*)(https?:\/\/github\.com\/[^\s]+)/i,
+      /(https?:\/\/github\.com\/[^\s]+)(?:\s*-\s*(?:my )?solution)/i,
+      /solution.*?(https?:\/\/github\.com\/[^\s]+)/i,
+      /(https?:\/\/github\.com\/[^\s]+)/i
+    ];
+
+    let githubUrl = null;
+    for (const pattern of solutionPatterns) {
+      const match = description.match(pattern);
+      if (match) {
+        githubUrl = match[1];
+        break;
+      }
+    }
+
+    if (!githubUrl) {
+      console.log('No GitHub URL found in description');
+      return null;
+    }
+
+    // If URL is a repository, try to find the solution file
+    if (!githubUrl.includes('/blob/')) {
+      try {
+        // Convert repository URL to API URL
+        const apiUrl = githubUrl
+          .replace('github.com', 'api.github.com/repos')
+          .replace(/\/$/, '');
+        
+        // Fetch repository contents
+        const response = await fetch(`${apiUrl}/contents`, {
+          headers: {
+            'Accept': 'application/vnd.github.v3+json',
+            'User-Agent': 'YouTube-Analysis-App'
+          }
+        });
+
+        if (response.ok) {
+          const contents = await response.json();
+          // Look for solution files
+          const solutionFile = contents.find((file: any) => {
+            const fileName = file.name.toLowerCase();
+            const isSolutionFile = fileName.includes('solution') || 
+                                 fileName.includes('solve') ||
+                                 /\.(java|py|js|cpp|c|cs)$/.test(fileName);
+            return isSolutionFile;
+          });
+
+          if (solutionFile) {
+            githubUrl = solutionFile.html_url;
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching repository contents:', error);
+      }
+    }
+
+    // Clean up the URL
+    githubUrl = githubUrl.replace(/\?.*$/, ''); // Remove query parameters
+    const fileType = githubUrl.split('.').pop()?.toLowerCase() || '';
+
+    console.log('Found GitHub URL:', { url: githubUrl, fileType });
+    return { url: githubUrl, fileType };
+
+  } catch (error) {
+    console.error('Error extracting GitHub URL:', error);
+    return null;
+  }
+}
+
+// Helper function to convert GitHub blob URL to raw content URL
+function convertToRawGitHubUrl(url: string): string {
+  try {
+    // Handle different GitHub URL formats
+    if (url.includes('github.com') && url.includes('/blob/')) {
+      // Convert blob URL to raw URL
+      return url.replace('github.com', 'raw.githubusercontent.com').replace('/blob/', '/');
+    }
+    return url;
+  } catch (error) {
+    console.error('Error converting GitHub URL:', error);
+    return url;
+  }
+}
+
+// Helper function to fetch code from GitHub
+async function fetchGitHubCode(urlInfo: { url: string; fileType: string }): Promise<{ code: string | null; fileType: string }> {
+  try {
+    const rawUrl = convertToRawGitHubUrl(urlInfo.url);
+    console.log('Fetching code from:', rawUrl);
+
+    const response = await fetch(rawUrl, {
+      headers: {
+        'Accept': 'text/plain, application/vnd.github.v3.raw',
+        'User-Agent': 'YouTube-Analysis-App'
+      }
+    });
+    
+    if (!response.ok) {
+      console.error('Failed to fetch code:', {
+        status: response.status,
+        statusText: response.statusText,
+        url: rawUrl
+      });
+      return { code: null, fileType: urlInfo.fileType };
+    }
+
+    const code = await response.text();
+    if (!code || code.trim().length === 0) {
+      console.error('Empty code content received');
+      return { code: null, fileType: urlInfo.fileType };
+    }
+
+    return { code, fileType: urlInfo.fileType };
+  } catch (error) {
+    console.error('Error fetching code:', error);
+    return { code: null, fileType: urlInfo.fileType };
+  }
+}
+
 // Update the analyzeVideoSubtitles function
 export const analyzeVideoSubtitles = async (videoId: string) => {
   try {
@@ -749,14 +932,29 @@ export const analyzeVideoSubtitles = async (videoId: string) => {
     const actualCode = extractActualCode(fullText);
     const problemType = detectProblemType(fullText);
 
+    // Check for GitHub code in description
+    const description = video.snippet?.description || '';
+    console.log('Checking description for GitHub URLs:', description);
+    
+    const githubUrlInfo = await extractGitHubFileUrl(description);
+    console.log('Found GitHub URL info:', githubUrlInfo);
+    
+    let githubCode = null;
+    let githubFileType = '';
+    let githubUrl = '';
+
+    if (githubUrlInfo) {
+      const { code, fileType } = await fetchGitHubCode(githubUrlInfo);
+      githubCode = code;
+      githubFileType = fileType;
+      githubUrl = githubUrlInfo.url;
+      console.log('GitHub code fetched:', code ? 'Successfully' : 'Failed', 'File type:', fileType);
+    }
+
     // Generate content analysis
     const contentAnalysis = [
-      'Performance Metrics:',
-      `- Views: ${video.statistics?.viewCount || '0'}`,
-      `- Likes: ${video.statistics?.likeCount || '0'}`,
-      `- Comments: ${video.statistics?.commentCount || '0'}`,
-      `- Engagement Rate: ${engagementRate}% (likes per view)`,
-      `- Comment Rate: ${commentRate}% (comments per view)`,
+      'Performance Analysis:',
+      `This video has ${video.statistics?.viewCount || '0'} views, ${video.statistics?.likeCount || '0'} likes, and ${video.statistics?.commentCount || '0'} comments. The engagement rate is ${engagementRate}% (likes per view) and comment rate is ${commentRate}% (comments per view).`,
       '',
       'Content Analysis:',
       `- Main Topic: ${video.snippet?.title}`,
@@ -779,11 +977,11 @@ export const analyzeVideoSubtitles = async (videoId: string) => {
           code,
           '```'
         ].join('\n'))
-      ].join('\n') : '',
-      '',
-      'Summary:',
-      `${video.snippet?.description?.slice(0, 200)}...`
+      ].join('\n') : ''
     ].filter(Boolean).join('\n');
+
+    // Generate summary separately
+    const transcriptSummary = generateSummary(fullText);
 
     // Prepare the complete analysis
     const analysis = {
@@ -799,9 +997,10 @@ export const analyzeVideoSubtitles = async (videoId: string) => {
       codeSnippets,
       actualCode,
       problemType,
-      summary: `This video titled "${video.snippet?.title}" was published on ${new Date(video.snippet?.publishedAt || '').toLocaleDateString()}. 
-                It has ${video.statistics?.viewCount || '0'} views, ${video.statistics?.likeCount || '0'} likes, and ${video.statistics?.commentCount || '0'} comments.
-                The video discusses: ${fullText.substring(0, 200)}...`,
+      summary: transcriptSummary,
+      githubCode,
+      githubUrl,
+      githubFileType
     };
 
     return analysis;
@@ -820,6 +1019,9 @@ export const analyzeVideoSubtitles = async (videoId: string) => {
       actualCode: '',
       problemType: '',
       summary: 'Unable to analyze video content. Please try again later.',
+      githubCode: null,
+      githubUrl: null,
+      githubFileType: null
     };
   }
 };
