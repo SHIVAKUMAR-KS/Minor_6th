@@ -12,8 +12,8 @@ import { useTheme } from '~/context/ThemeContext';
 import { lightTheme, darkTheme } from '~/theme/colors';
 
 const POPULAR_CHANNELS = [
-  { name: 'notJustDev', id: 'UCYSa_YLoJokZAwHhlwJntIA' },
-  { name: 'PewDiePie', id: 'UC-lHJZR3Gqxm24_Vd_AJ5Yw' },
+  { name: 'TakeUForward |', id: 'UCYSa_YLoJokZAwHhlwJntIA' },
+  { name: ' Coding_Channel', id: 'UC-lHJZR3Gqxm24_Vd_AJ5Yw' },
 ];
 
 const fetchChannels = async () => {

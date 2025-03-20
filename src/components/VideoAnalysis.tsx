@@ -117,12 +117,12 @@ export const VideoAnalysis: React.FC<VideoAnalysisProps> = ({ videoId }) => {
                     </View>
                 ))}
 
-                {analysis.contentAnalysis && (
+                {/* {analysis.contentAnalysis && (
                     <View style={styles.section}>
                         <Text style={styles.sectionTitle}>Content Analysis</Text>
                         <Text style={styles.contentText}>{analysis.contentAnalysis}</Text>
                     </View>
-                )}
+                )} */}
 
                 {analysis.actualCode && (
                     <View style={styles.section}>
@@ -303,7 +303,12 @@ const styles = StyleSheet.create({
     },
     summaryText: {
         lineHeight: 20,
-        color: '#444',
+        color: 'black',
+        marginTop: 8,
+        fontWeight:'bold',
+        backgroundColor:'orange'
+        
+        
     },
     githubUrl: {
         fontSize: 12,
