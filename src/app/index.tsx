@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Stack, Link, router } from 'expo-router';
 import { useState } from 'react';
 import { View, Text, TextInput, ScrollView, Pressable, Alert, Image, ActivityIndicator, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 import { Button } from '~/components/Button';
 import { Container } from '~/components/Container';
@@ -79,6 +80,59 @@ export default function Home() {
     }
   };
 
+  const handleDeleteChannel = async (channelId: string) => {
+    Alert.alert(
+      'Delete Channel',
+      'Are you sure you want to remove this channel from the analysis?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              console.log('Attempting to delete channel:', channelId);
+
+              // First delete all related analysis records
+              const { error: analysisError } = await supabase
+                .from('channel_analysis')
+                .delete()
+                .eq('channel_id', channelId);
+
+              if (analysisError) {
+                console.error('Error deleting analysis records:', analysisError);
+                throw new Error('Failed to delete channel analysis records');
+              }
+
+              // Then delete the channel
+              const { error: deleteError } = await supabase
+                .from('yt_channels')
+                .delete()
+                .eq('id', channelId);
+
+              if (deleteError) {
+                console.error('Delete error:', deleteError);
+                throw deleteError;
+              }
+
+              console.log('Channel deleted successfully');
+              queryClient.invalidateQueries({ queryKey: ['channels'] });
+            } catch (error: any) {
+              console.error('Delete operation failed:', error);
+              Alert.alert(
+                'Error',
+                error.message || 'Failed to delete channel. Please try again.'
+              );
+            }
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <Container>
       <Stack.Screen
@@ -147,23 +201,31 @@ export default function Home() {
         ) : (
           <ScrollView style={styles.recentChannels}>
             {channels?.map((channel) => (
-              <Link key={channel.id} href={`/channel/${channel.id}`} asChild>
-                <Pressable style={[styles.channelCard, {
-                  backgroundColor: theme.surface,
-                  borderColor: theme.border,
-                }]}>
-                  <Image
-                    source={{ uri: channel.profile_image }}
-                    style={styles.channelImage}
-                  />
-                  <View style={styles.channelInfo}>
-                    <Text style={[styles.channelName, { color: theme.text }]}>{channel.name}</Text>
-                    <Text style={[styles.channelSubscribers, { color: theme.textSecondary }]}>
-                      {channel.subscribers} subscribers
-                    </Text>
-                  </View>
+              <View key={channel.id} style={styles.channelCardContainer}>
+                <Link href={`/channel/${channel.id}`} asChild>
+                  <Pressable style={[styles.channelCard, {
+                    backgroundColor: theme.surface,
+                    borderColor: theme.border,
+                  }]}>
+                    <Image
+                      source={{ uri: channel.profile_image }}
+                      style={styles.channelImage}
+                    />
+                    <View style={styles.channelInfo}>
+                      <Text style={[styles.channelName, { color: theme.text }]}>{channel.name}</Text>
+                      <Text style={[styles.channelSubscribers, { color: theme.textSecondary }]}>
+                        {channel.subscribers} subscribers
+                      </Text>
+                    </View>
+                  </Pressable>
+                </Link>
+                <Pressable
+                  style={[styles.deleteButton, { backgroundColor: theme.error }]}
+                  onPress={() => handleDeleteChannel(channel.id)}
+                >
+                  <Ionicons name="trash-outline" size={20} color="#fff" />
                 </Pressable>
-              </Link>
+              </View>
             ))}
           </ScrollView>
         )}
@@ -221,12 +283,17 @@ const styles = StyleSheet.create({
   recentChannels: {
     marginTop: 8,
   },
+  channelCardContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
   channelCard: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     padding: 12,
     borderRadius: 8,
-    marginBottom: 8,
     borderWidth: 1,
   },
   channelImage: {
@@ -244,5 +311,10 @@ const styles = StyleSheet.create({
   channelSubscribers: {
     fontSize: 14,
     marginTop: 2,
+  },
+  deleteButton: {
+    padding: 12,
+    borderRadius: 8,
+    marginLeft: 8,
   },
 });
