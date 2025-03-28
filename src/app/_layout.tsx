@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider } from '../context/ThemeContext';
 import { useTheme } from '../context/ThemeContext';
 import { lightTheme, darkTheme } from '../theme/colors';
-import { View, StatusBar } from 'react-native';
+import { View, StatusBar, SafeAreaView, Platform } from 'react-native';
 import { ThemeToggle } from '../components/ThemeToggle';
 
 // Create a client
@@ -16,7 +16,7 @@ function LayoutContent() {
   const theme = isDark ? darkTheme : lightTheme;
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.background }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
       <StatusBar
         barStyle={isDark ? 'light-content' : 'dark-content'}
         backgroundColor={theme.background}
@@ -30,14 +30,16 @@ function LayoutContent() {
           headerTintColor: theme.text,
           headerTitleStyle: {
             color: theme.text,
+            fontSize: 20, // Responsive header font size
           },
           headerRight: () => <ThemeToggle />,
           contentStyle: {
             backgroundColor: theme.background,
+            paddingHorizontal: 16, // Mobile padding
           },
         }}
       />
-    </View>
+    </SafeAreaView>
   );
 }
 
