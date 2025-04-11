@@ -370,7 +370,7 @@ export default function Channel() {
               <Text className="text-gray-600">{channel.subscribers} subscribers</Text>
             </View>
           </View>
-          <Text className="mt-4">{channel.description}</Text>
+          {/* <Text className="mt-4">{channel.description}</Text> */}
         </View>
       </View>
 
