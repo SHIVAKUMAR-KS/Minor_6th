@@ -38,3 +38,8 @@ WHERE id IN (
 
 ### based on subtitle analyse the video and give proepr desciption
 
+
+# Deployment
+eas build --platform android --profile production
+
+
